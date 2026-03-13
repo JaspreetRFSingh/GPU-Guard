@@ -191,4 +191,4 @@ This project was built in approximately 2 weeks while learning:
 
 ---
 
-*Maintained by: [Your Name] | [GitHub Profile] | [LinkedIn]*
+*Maintained by: Jaspreet
