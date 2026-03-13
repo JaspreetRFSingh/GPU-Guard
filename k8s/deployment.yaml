@@ -1,0 +1,228 @@
+# GPUGuard — Kubernetes Manifests
+# Deploys: gpuguard-api, Prometheus, Grafana, Alertmanager
+# Namespace: gpuguard
+#
+# Apply with: kubectl apply -f k8s/
+# Or with Kustomize: kubectl apply -k k8s/
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpuguard
+  labels:
+    app.kubernetes.io/name: gpuguard
+    team: ai-infrastructure
+
+---
+# ─── GPUGuard API ─────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuguard-api
+  namespace: gpuguard
+  labels:
+    app: gpuguard-api
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gpuguard-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: gpuguard-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: gpuguard
+          image: registry.example.com/ai-infra/gpuguard:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: ALERT_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gpuguard-secrets
+                  key: alert-webhook-url
+                  optional: true
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpuguard-api
+  namespace: gpuguard
+  labels:
+    app: gpuguard-api
+spec:
+  selector:
+    app: gpuguard-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus Operator (if using kube-prometheus-stack)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gpuguard-api
+  namespace: gpuguard
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: gpuguard-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+      scrapeTimeout: 4s
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpuguard-api
+  namespace: gpuguard
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpuguard.internal.nvidia.com
+      secretName: gpuguard-tls
+  rules:
+    - host: gpuguard.internal.nvidia.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpuguard-api
+                port:
+                  number: 8000
+
+---
+# ─── HPA — Scale API replicas on CPU pressure ─────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gpuguard-api
+  namespace: gpuguard
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gpuguard-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# ─── RBAC ─────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpuguard
+  namespace: gpuguard
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gpuguard-role
+  namespace: gpuguard
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gpuguard-rolebinding
+  namespace: gpuguard
+subjects:
+  - kind: ServiceAccount
+    name: gpuguard
+    namespace: gpuguard
+roleRef:
+  kind: Role
+  name: gpuguard-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ─── PodDisruptionBudget — ensure HA during upgrades ─────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gpuguard-api-pdb
+  namespace: gpuguard
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: gpuguard-api

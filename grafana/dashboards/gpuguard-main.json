@@ -1,0 +1,302 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+  ],
+  "title": "GPUGuard — AI Training Infrastructure",
+  "uid": "gpuguard-main",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["ai-infrastructure", "gpu", "slo", "nvidia"],
+  "annotations": {
+    "list": [
+      {
+        "name": "Incidents",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "expr": "changes(gpuguard_cluster_failure_events_total[1m]) > 0",
+        "iconColor": "red",
+        "titleFormat": "Failure detected"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "job_id",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(gpuguard_job_training_loss, job_id)",
+        "multi": true,
+        "includeAll": true
+      },
+      {
+        "name": "model_name",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(gpuguard_job_training_loss, model_name)",
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Cluster Status",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [
+        {
+          "expr": "gpuguard_cluster_running_jobs_total",
+          "legendFormat": "Running Jobs",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{"color": "green", "value": 0}] },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Avg GPU Utilization",
+      "type": "gauge",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "gpuguard_cluster_avg_gpu_utilization_pct",
+          "legendFormat": "GPU Util %",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "minVizValue": 0, "maxVizValue": 100 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 75},
+              {"color": "green", "value": 85}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Total Throughput (tokens/sec)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "gpuguard_cluster_total_throughput_tokens_per_sec",
+          "legendFormat": "Tokens/sec",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{"color": "green", "value": 0}] }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Auto-Remediation Events",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "gpuguard_cluster_restart_events_total",
+          "legendFormat": "Restarts",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}] }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "SLO Error Budget Remaining",
+      "type": "bargauge",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 6 },
+      "options": { "orientation": "horizontal", "displayMode": "lcd", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "gpuguard_slo_error_budget_remaining_pct",
+          "legendFormat": "{{slo_name}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 10},
+              {"color": "green", "value": 25}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Burn Rate (1.0 = sustainable)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpuguard_slo_burn_rate",
+          "legendFormat": "{{slo_name}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "thresholds": { "steps": [{"color": "green"}, {"color": "yellow", "value": 6}, {"color": "red", "value": 14.4}] }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Training Loss by Job",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 7 },
+      "targets": [
+        {
+          "expr": "gpuguard_job_training_loss{job_id=~\"$job_id\"}",
+          "legendFormat": "{{job_id}} ({{model_name}})",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1.5 } }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Token Throughput by Job",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 7 },
+      "targets": [
+        {
+          "expr": "gpuguard_job_throughput_tokens_per_sec{job_id=~\"$job_id\"}",
+          "legendFormat": "{{job_id}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 1.5 } }
+      }
+    },
+    {
+      "id": 30,
+      "title": "GPU Utilization Heatmap (all nodes)",
+      "type": "heatmap",
+      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "gpuguard_node_gpu_utilization_pct",
+          "legendFormat": "{{node_id}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "options": {
+        "color": { "scheme": "Greens", "fill": "opacity" },
+        "yAxis": { "unit": "percent" }
+      }
+    },
+    {
+      "id": 40,
+      "title": "Node GPU Memory Utilization",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 25, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpuguard_node_gpu_memory_utilization_pct",
+          "legendFormat": "{{node_id}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 }
+      }
+    },
+    {
+      "id": 41,
+      "title": "NVLink Bandwidth (GB/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 25, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpuguard_node_nvlink_bandwidth_gbps",
+          "legendFormat": "{{node_id}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "Gbits", "custom": { "lineWidth": 1 } }
+      }
+    },
+    {
+      "id": 50,
+      "title": "Failure Events Rate (per min)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(gpuguard_cluster_failure_events_total[1m]) * 60",
+          "legendFormat": "failures/min",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 20 },
+          "thresholds": { "steps": [{"color": "green"}, {"color": "red", "value": 1}] }
+        }
+      }
+    },
+    {
+      "id": 51,
+      "title": "Node Health (1=healthy, 0=down)",
+      "type": "state-timeline",
+      "gridPos": { "x": 12, "y": 31, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpuguard_node_healthy",
+          "legendFormat": "{{node_id}} / {{job_id}}",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "OK", "color": "green" } }}
+          ]
+        }
+      }
+    }
+  ]
+}

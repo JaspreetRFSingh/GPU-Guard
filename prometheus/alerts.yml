@@ -1,0 +1,104 @@
+groups:
+
+  # ─── SLO Burn Rate Alerts (Multi-window, Google SRE Book style) ────────────
+  - name: slo.burn_rate
+    rules:
+
+      - alert: JobAvailabilityBurnRateCritical
+        expr: gpuguard_slo_burn_rate{slo_name="job_availability"} > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          team: ai-infrastructure
+        annotations:
+          summary: "Job availability SLO burning error budget at critical rate"
+          description: >
+            Burn rate {{ $value | humanize }}x exceeds 14.4x threshold.
+            At this rate the entire error budget will be exhausted in under 1 hour.
+            Runbook: https://wiki.internal/runbooks/job-availability
+
+      - alert: JobAvailabilityBurnRateWarning
+        expr: gpuguard_slo_burn_rate{slo_name="job_availability"} > 6.0
+        for: 5m
+        labels:
+          severity: warning
+          team: ai-infrastructure
+        annotations:
+          summary: "Job availability SLO elevated burn rate"
+          description: >
+            Burn rate {{ $value | humanize }}x. Budget will be exhausted in ~2 hours
+            if rate is sustained. Investigate recent failures.
+
+      - alert: ThroughputBurnRateCritical
+        expr: gpuguard_slo_burn_rate{slo_name="training_throughput"} > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          team: ai-infrastructure
+        annotations:
+          summary: "Training throughput SLO critically degraded"
+          description: "Token throughput below SLO threshold. Burn rate: {{ $value | humanize }}x"
+
+      - alert: ErrorBudgetAlmostGone
+        expr: gpuguard_slo_error_budget_remaining_pct < 10
+        for: 5m
+        labels:
+          severity: warning
+          team: ai-infrastructure
+        annotations:
+          summary: "SLO {{ $labels.slo_name }} error budget below 10%"
+          description: "Remaining budget: {{ $value }}%. Freeze non-critical experiments."
+
+  # ─── GPU Health Alerts ─────────────────────────────────────────────────────
+  - name: gpu.health
+    rules:
+
+      - alert: GPUHighTemperature
+        expr: gpuguard_node_gpu_temp_celsius > 88
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU temperature critical on {{ $labels.node_id }}"
+          description: "Temperature {{ $value }}°C. Check datacenter cooling."
+
+      - alert: GPUMemoryPressure
+        expr: gpuguard_node_gpu_memory_utilization_pct > 95
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU memory near capacity on {{ $labels.node_id }}"
+          description: "Memory at {{ $value }}%. OOM failure imminent."
+
+      - alert: NodeDown
+        expr: gpuguard_node_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.node_id }} is unhealthy"
+          description: "Job {{ $labels.job_id }} has a failed node. Auto-remediation in progress."
+
+  # ─── Cluster Throughput Alerts ─────────────────────────────────────────────
+  - name: cluster.throughput
+    rules:
+
+      - alert: ClusterThroughputDegraded
+        expr: >
+          gpuguard_cluster_total_throughput_tokens_per_sec
+          < 0.7 * gpuguard_cluster_total_throughput_tokens_per_sec offset 10m
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cluster throughput dropped > 30% in last 10 minutes"
+
+      - alert: HighRestartRate
+        expr: rate(gpuguard_cluster_restart_events_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High job restart rate detected"
+          description: "More than 1 restart per 10 minutes. Check for systemic failures."
