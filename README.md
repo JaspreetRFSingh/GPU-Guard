@@ -1,7 +1,7 @@
 # GPUGuard 🛡️
 ### AI Training Infrastructure Reliability & Observability Platform
 
-> Built as a self-directed portfolio project to demonstrate systems engineering, SRE, and AI infrastructure skills — directly aligned with the **NVIDIA Systems Software Engineer, AI Infrastructure** role.
+> Built as a self-directed portfolio project to demonstrate systems engineering, SRE, and AI infrastructure skills
 
 ---
 
