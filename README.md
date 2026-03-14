@@ -1,7 +1,7 @@
 # GPUGuard 🛡️
 ### AI Training Infrastructure Reliability & Observability Platform
 
-> Built as a self-directed portfolio project to demonstrate systems engineering, SRE, and AI infrastructure skills — directly aligned with the **NVIDIA Systems Software Engineer, AI Infrastructure** role.
+> Built as a self-directed portfolio project to demonstrate systems engineering, SRE, and AI infrastructure skills
 
 ---
 
@@ -146,20 +146,6 @@ rate(gpuguard_cluster_failure_events_total[5m])
 gpuguard_slo_error_budget_remaining_pct{slo_name="mttr"}
 ```
 
----
-
-## Why this maps to the NVIDIA AI Infrastructure role
-
-The JD asks for:
-
-- **"Build tools and frameworks to improve observability"** → Prometheus exporter with 20+ GPU/job metrics
-- **"SRE principles, error budgets, SLOs, SLAs"** → Full SLO engine with rolling-window burn rate, 4 production SLOs
-- **"Incident management, blameless postmortems"** → Structured incident log with MTTR tracking per failure type
-- **"Automation tools to reduce manual processes"** → Auto-remediation with runbooks for all major GPU failure modes
-- **"HPC, GPU Training, AI Model training workflows"** → Simulates LLM training on H100s with NCCL, NVLink, gradient checkpointing
-- **"CI/CD systems (GitLab)"** → Full `.gitlab-ci.yml` with lint/test/security/staged deploy
-- **"Infrastructure as Code (Terraform CDK)"** → Docker Compose + Prometheus/Grafana provisioning
-- **"Observability platforms (Prometheus, Loki)"** → Native Prometheus integration with multi-window alert rules
 
 ---
 
@@ -176,7 +162,7 @@ The JD asks for:
 
 ## Self-Learning Notes
 
-This project was built in approximately 2 weeks while learning:
+This project was built while learning:
 - Google SRE Book (error budgets, burn rates, SLI/SLO/SLA)
 - Prometheus data model and PromQL
 - NCCL architecture and GPU collective communications failure modes
